@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masuk — Portal Tugas Siswa</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#2563eb;--primary-dark:#1d4ed8;--ink:#0f172a;--mute:#64748b;--ok:#16a34a}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:"Nunito",system-ui,sans-serif;color:var(--ink);display:flex;align-items:center;justify-content:center;padding:20px;background:#0f172a;background-image:linear-gradient(160deg,rgba(15,23,42,.55),rgba(15,23,42,.75)),url("bg-kelas.jpg");background-size:cover;background-position:center;background-attachment:fixed}
+.card{width:min(420px,100%);background:rgba(255,255,255,.96);border-radius:18px;padding:32px 28px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.badge{display:inline-block;background:#dbeafe;color:var(--primary);font-weight:800;font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:99px;margin-bottom:12px}
+h1{margin:0 0 6px;font-size:1.55rem;font-weight:800}
+.sub{margin:0 0 22px;color:var(--mute);font-size:.95rem}
+label{display:block;font-weight:700;font-size:.85rem;margin:12px 0 6px;color:#334155}
+input{width:100%;padding:12px 14px;border:2px solid #e2e8f0;border-radius:10px;font:inherit;outline:none}
+input:focus{border-color:var(--primary)}
+.btn{width:100%;margin-top:18px;padding:13px;border:none;border-radius:10px;background:var(--primary);color:#fff;font:800 1rem "Nunito",sans-serif;cursor:pointer}
+.btn:hover{background:var(--primary-dark)}
+.tabs{display:flex;gap:8px;margin-bottom:8px}
+.tabs button{flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:10px;background:#fff;font:700 .9rem "Nunito",sans-serif;cursor:pointer;color:#64748b}
+.tabs button.active{border-color:var(--primary);color:var(--primary);background:#eff6ff}
+.msg{min-height:1.3em;margin-top:12px;font-size:.9rem;font-weight:600}
+.msg.err{color:#dc2626}.msg.ok{color:var(--ok)}
+#formReg{display:none}
+.hint{margin-top:18px;font-size:.8rem;color:var(--mute);text-align:center;line-height:1.4}
+.hint a{color:var(--primary);font-weight:700}
+</style>
+</head>
+<body>
+<div class="card">
+  <span class="badge">Portal Belajar</span>
+  <h1>Selamat datang</h1>
+  <p class="sub">Masuk untuk melihat dan mengerjakan pilihan tugas. Data tersimpan di server website.</p>
+  <div class="tabs">
+    <button type="button" class="active" id="tabLogin">Masuk</button>
+    <button type="button" id="tabReg">Daftar</button>
+  </div>
+  <form id="formLogin">
+    <label>Username / NIS</label>
+    <input id="loginUser" autocomplete="username" required placeholder="contoh: siswa01">
+    <label>Password</label>
+    <input id="loginPass" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Masuk</button>
+  </form>
+  <form id="formReg">
+    <label>Nama lengkap</label>
+    <input id="regName" required placeholder="Nama siswa">
+    <label>Username / NIS</label>
+    <input id="regUser" required minlength="3" placeholder="huruf/angka">
+    <label>Kelas</label>
+    <input id="regClass" required placeholder="contoh: 5A">
+    <label>Password</label>
+    <input id="regPass" type="password" required minlength="4" autocomplete="new-password">
+    <button class="btn" type="submit">Daftar & Masuk</button>
+  </form>
+  <p class="msg" id="msg"></p>
+  <p class="hint">Guru/admin: <a href="admin.html">kelola soal di database server</a></p>
+</div>
+<script>
+const API="";
+const SESSION_KEY="portal_tugas_session";
+const msg=document.getElementById("msg");
+const formLogin=document.getElementById("formLogin");
+const formReg=document.getElementById("formReg");
+document.getElementById("tabLogin").onclick=()=>{document.getElementById("tabLogin").classList.add("active");document.getElementById("tabReg").classList.remove("active");formLogin.style.display="block";formReg.style.display="none";msg.textContent=""};
+document.getElementById("tabReg").onclick=()=>{document.getElementById("tabReg").classList.add("active");document.getElementById("tabLogin").classList.remove("active");formReg.style.display="block";formLogin.style.display="none";msg.textContent=""};
+try{const s=JSON.parse(sessionStorage.getItem(SESSION_KEY)||"null");if(s&&s.username)location.href="tugas.html"}catch(e){}
+formLogin.onsubmit=async e=>{
+  e.preventDefault();
+  msg.className="msg";msg.textContent="Memproses...";
+  try{
+    const r=await fetch(API+"/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:document.getElementById("loginUser").value.trim(),password:document.getElementById("loginPass").value})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||"Gagal masuk");
+    sessionStorage.setItem(SESSION_KEY,JSON.stringify(d));
+    location.href="tugas.html";
+  }catch(err){msg.className="msg err";msg.textContent=err.message}
+};
+formReg.onsubmit=async e=>{
+  e.preventDefault();
+  msg.className="msg";msg.textContent="Mendaftar...";
+  try{
+    const r=await fetch(API+"/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("regName").value.trim(),username:document.getElementById("regUser").value.trim(),kelas:document.getElementById("regClass").value.trim(),password:document.getElementById("regPass").value})});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||"Gagal daftar");
+    sessionStorage.setItem(SESSION_KEY,JSON.stringify(d));
+    location.href="tugas.html";
+  }catch(err){msg.className="msg err";msg.textContent=err.message}
+};
+</script>
+</body>
+</html>

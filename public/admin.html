@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin Tugas — Server</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#2563eb;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--ok:#16a34a;--bad:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Nunito",system-ui,sans-serif;color:var(--ink);background:#f1f5f9;min-height:100vh}
+.wrap{max-width:960px;margin:0 auto;padding:20px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+h1{margin:0;font-size:1.3rem}a{color:var(--primary);font-weight:700;text-decoration:none}
+.card{background:#fff;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 4px 16px rgba(15,23,42,.06)}
+label{display:block;font-weight:700;font-size:.85rem;margin:10px 0 4px}
+input,select,textarea{width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:8px;font:inherit}
+textarea{min-height:70px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.row{grid-template-columns:1fr}}
+.btn{border:none;border-radius:8px;padding:10px 16px;font:800 .9rem "Nunito",sans-serif;cursor:pointer;background:var(--primary);color:#fff}
+.btn.ghost{background:#e2e8f0;color:#334155}.btn.danger{background:#fee2e2;color:#b91c1c}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{padding:8px 14px;border:2px solid var(--line);border-radius:8px;background:#fff;font:700 .85rem "Nunito",sans-serif;cursor:pointer;color:var(--mute)}
+.tabs button.active{border-color:var(--primary);color:var(--primary);background:#eff6ff}
+.msg{font-weight:700;font-size:.9rem;margin-top:8px}.msg.ok{color:var(--ok)}.msg.err{color:var(--bad)}
+.hint{color:var(--mute);font-size:.85rem}
+.qbox{border:2px dashed var(--line);border-radius:10px;padding:12px;margin:12px 0;background:#f8fafc}
+.login{max-width:360px;margin:60px auto;background:#fff;padding:24px;border-radius:14px}
+#app[hidden],#loginBox[hidden]{display:none}
+.tugas-item{border-bottom:1px solid var(--line);padding:12px 0}
+</style>
+</head>
+<body>
+<div id="loginBox" class="login">
+  <h2 style="margin:0 0 8px">Admin (Database Server)</h2>
+  <p class="hint">Data tersimpan di server — terlihat di semua HP & laptop.</p>
+  <label>Password admin</label>
+  <input type="password" id="pw">
+  <button class="btn" type="button" id="loginBtn" style="width:100%;margin-top:14px">Masuk</button>
+  <p class="msg err" id="loginErr" hidden>Password salah</p>
+</div>
+<div id="app" class="wrap" hidden>
+  <header>
+    <h1>Admin: 1 Tugas = max 20 soal PG</h1>
+    <div><a href="login.html">Portal siswa</a> · <button type="button" class="btn ghost" id="logoutBtn">Keluar</button></div>
+  </header>
+  <div class="tabs">
+    <button type="button" class="active" data-tab="buat">Buat Tugas</button>
+    <button type="button" data-tab="daftar">Daftar Tugas</button>
+    <button type="button" data-tab="jawaban">Jawaban Siswa</button>
+  </div>
+  <div id="tab-buat" class="card">
+    <div class="row">
+      <div><label>Judul tugas</label><input id="tTitle"></div>
+      <div><label>Mapel</label><input id="tMapel"></div>
+    </div>
+    <label>Deskripsi</label><textarea id="tDesc"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">Soal (<span id="qCount">0</span>/20)</h3>
+      <button type="button" class="btn ghost" id="addQ">+ Tambah soal</button>
+    </div>
+    <div id="qList"></div>
+    <button type="button" class="btn" id="saveTugas" style="margin-top:14px">Simpan ke server</button>
+    <p class="msg" id="saveMsg"></p>
+  </div>
+  <div id="tab-daftar" class="card" hidden><div id="listTugas" class="hint"></div></div>
+  <div id="tab-jawaban" class="card" hidden><div id="listJawaban" class="hint"></div></div>
+</div>
+<script>
+const API="";
+const ADMIN_KEY="portal_admin_pass";
+let adminPass=sessionStorage.getItem(ADMIN_KEY)||"";
+const MAX_Q=20;
+let draftQuestions=[];
+function headers(){return{"Content-Type":"application/json","X-Admin-Pass":adminPass}}
+
+function renderDraft(){
+  document.getElementById("qCount").textContent=draftQuestions.length;
+  const box=document.getElementById("qList");box.innerHTML="";
+  draftQuestions.forEach(function(q,i){
+    const div=document.createElement("div");div.className="qbox";
+    div.innerHTML="<h4 style='margin:0 0 8px'>Soal "+(i+1)+" <button type='button' class='btn danger' data-rm='"+i+"' style='float:right;padding:4px 8px;font-size:.75rem'>Hapus</button></h4>"+
+      "<label>Pertanyaan</label><textarea data-f='body' data-i='"+i+"'>"+(q.body||"")+"</textarea>"+
+      "<div class='row'><div><label>A</label><input data-f='A' data-i='"+i+"' value='"+(q.options&&q.options.A||"")+"'></div>"+
+      "<div><label>B</label><input data-f='B' data-i='"+i+"' value='"+(q.options&&q.options.B||"")+"'></div>"+
+      "<div><label>C</label><input data-f='C' data-i='"+i+"' value='"+(q.options&&q.options.C||"")+"'></div>"+
+      "<div><label>D</label><input data-f='D' data-i='"+i+"' value='"+(q.options&&q.options.D||"")+"'></div></div>"+
+      "<label>Kunci</label><select data-f='key' data-i='"+i+"'>"+["","A","B","C","D"].map(function(k){return "<option value='"+k+"'"+(q.answerKey===k?" selected":"")+">"+(k||"—")+"</option>"}).join("")+"</select>";
+    box.appendChild(div);
+  });
+  box.querySelectorAll("[data-rm]").forEach(function(btn){btn.onclick=function(){draftQuestions.splice(+btn.dataset.rm,1);renderDraft()}});
+  box.querySelectorAll("[data-f]").forEach(function(el){
+    el.oninput=el.onchange=function(){
+      const i=+el.dataset.i,f=el.dataset.f;
+      if(f==="body")draftQuestions[i].body=el.value;
+      else if(f==="key")draftQuestions[i].answerKey=el.value||null;
+      else{if(!draftQuestions[i].options)draftQuestions[i].options={};draftQuestions[i].options[f]=el.value}
+    };
+  });
+}
+document.getElementById("addQ").onclick=function(){
+  if(draftQuestions.length>=MAX_Q){alert("Maks 20 soal");return}
+  draftQuestions.push({id:"qq_"+Date.now()+"_"+draftQuestions.length,body:"",options:{A:"",B:"",C:"",D:""},answerKey:null,points:5});
+  renderDraft();
+};
+
+const loginBox=document.getElementById("loginBox"),app=document.getElementById("app");
+function showApp(){loginBox.hidden=true;app.hidden=false;renderList();renderSubs()}
+function showLogin(){loginBox.hidden=false;app.hidden=true;sessionStorage.removeItem(ADMIN_KEY);adminPass=""}
+if(adminPass)showApp();
+document.getElementById("loginBtn").onclick=async function(){
+  const pw=document.getElementById("pw").value;
+  const r=await fetch(API+"/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:pw})});
+  if(!r.ok){document.getElementById("loginErr").hidden=false;return}
+  adminPass=pw;sessionStorage.setItem(ADMIN_KEY,pw);document.getElementById("loginErr").hidden=true;showApp();
+};
+document.getElementById("logoutBtn").onclick=showLogin;
+document.querySelectorAll(".tabs button").forEach(function(btn){
+  btn.onclick=function(){
+    document.querySelectorAll(".tabs button").forEach(function(b){b.classList.remove("active")});
+    btn.classList.add("active");
+    ["buat","daftar","jawaban"].forEach(function(t){document.getElementById("tab-"+t).hidden=btn.dataset.tab!==t});
+  };
+});
+document.getElementById("saveTugas").onclick=async function(){
+  const msg=document.getElementById("saveMsg");
+  const payload={title:document.getElementById("tTitle").value.trim(),mapel:document.getElementById("tMapel").value.trim(),description:document.getElementById("tDesc").value.trim(),questions:draftQuestions};
+  try{
+    const r=await fetch(API+"/api/tugas",{method:"POST",headers:headers(),body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||"Gagal");
+    msg.className="msg ok";msg.textContent="Tersimpan di server! "+d.questions.length+" soal. Semua HP/laptop bisa melihat.";
+    draftQuestions=[];document.getElementById("tTitle").value="";document.getElementById("tMapel").value="";document.getElementById("tDesc").value="";renderDraft();renderList();
+  }catch(e){msg.className="msg err";msg.textContent=e.message}
+};
+async function renderList(){
+  const box=document.getElementById("listTugas");
+  try{
+    const r=await fetch(API+"/api/tugas",{headers:headers()});
+    const list=await r.json();
+    if(!list.length){box.innerHTML="<p class='hint'>Belum ada tugas.</p>";return}
+    box.innerHTML=list.slice().reverse().map(function(t){
+      return "<div class='tugas-item'><strong>"+t.title+"</strong> · "+t.mapel+" · "+(t.questions||[]).length+" soal "+
+        "<button type='button' class='btn danger' data-del='"+t.id+"' style='margin-left:8px'>Hapus</button></div>";
+    }).join("");
+    box.querySelectorAll("[data-del]").forEach(function(btn){
+      btn.onclick=async function(){
+        if(!confirm("Hapus?"))return;
+        await fetch(API+"/api/tugas/"+btn.dataset.del,{method:"DELETE",headers:headers()});
+        renderList();
+      };
+    });
+  }catch(e){box.textContent=e.message}
+}
+async function renderSubs(){
+  const box=document.getElementById("listJawaban");
+  try{
+    const r=await fetch(API+"/api/submissions",{headers:headers()});
+    const list=await r.json();
+    if(!list.length){box.innerHTML="<p class='hint'>Belum ada.</p>";return}
+    box.innerHTML=list.map(function(s){
+      var locked=0,total=0,score=0;
+      if(s.answers){Object.keys(s.answers).forEach(function(k){total++;if(s.answers[k].locked)locked++;if(s.answers[k].autoScore!=null)score+=s.answers[k].autoScore})}
+      return "<div class='tugas-item'><strong>"+(s.name||s.username)+"</strong> · "+(s.tugasTitle||"")+"<br><span class='hint'>Terkunci "+locked+"/"+total+" · skor "+score+"</span></div>";
+    }).join("");
+  }catch(e){box.textContent=e.message}
+}
+</script>
+</body>
+</html>

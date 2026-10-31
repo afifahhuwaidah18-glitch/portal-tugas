@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daftar Tugas — Portal Siswa</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#2563eb;--ink:#0f172a;--mute:#64748b;--ok:#16a34a}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:"Nunito",system-ui,sans-serif;color:var(--ink);
+background:#0f172a;background-image:linear-gradient(180deg,rgba(15,23,42,.6),rgba(15,23,42,.82)),url("bg-kelas.jpg");
+background-size:cover;background-position:center;background-attachment:fixed}
+.top{max-width:900px;margin:0 auto;padding:20px 20px 0;display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between}
+.brand{color:#fff}.brand h1{margin:0;font-size:1.35rem;font-weight:800}.brand p{margin:4px 0 0;opacity:.85;font-size:.9rem}
+.userbox{background:rgba(255,255,255,.95);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:12px;font-size:.9rem}
+.userbox strong{display:block}.userbox span{color:var(--mute);font-size:.8rem}
+.btn{border:none;border-radius:8px;padding:8px 14px;font:700 .85rem "Nunito",sans-serif;cursor:pointer;background:var(--primary);color:#fff}
+.btn.out{background:#fee2e2;color:#b91c1c}.btn.ghost{background:#f1f5f9;color:#334155}
+.btn.lock{background:#fef3c7;color:#b45309}
+.wrap{max-width:900px;margin:0 auto;padding:20px}
+.hero{background:rgba(255,255,255,.95);border-radius:16px;padding:20px;margin-bottom:16px}
+.hero h2{margin:0 0 6px}.hero p{margin:0;color:var(--mute)}
+.card{background:rgba(255,255,255,.96);border-radius:14px;padding:18px;margin-bottom:12px}
+.card h3{margin:0 0 6px}.meta{color:var(--mute);font-size:.9rem;margin-bottom:10px}
+.tag{display:inline-block;font-size:.72rem;font-weight:800;padding:3px 8px;border-radius:99px;background:#dbeafe;color:#1d4ed8;margin-right:6px}
+.qitem{border:2px solid #e2e8f0;border-radius:12px;padding:14px;margin:12px 0;background:#fff}
+.qitem.locked-box{border-color:#86efac;background:#f0fdf4}
+.qitem h4{margin:0 0 8px}
+.opt{display:block;padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;margin:6px 0;cursor:pointer}
+.opt:has(input:checked){border-color:var(--primary);background:#eff6ff}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+.lock-badge{font-size:.8rem;font-weight:800;color:var(--ok)}
+.empty{text-align:center;padding:28px;color:var(--mute)}
+#viewTugas{display:none}
+footer{max-width:900px;margin:0 auto;padding:10px 20px 40px;color:rgba(255,255,255,.75);font-size:.85rem}
+footer a{color:#93c5fd}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><h1>Daftar Tugas</h1><p>Database server · semua perangkat</p></div>
+  <div class="userbox">
+    <div><strong id="userName">—</strong><span id="userMeta">—</span></div>
+    <button type="button" class="btn out" id="logoutBtn">Keluar</button>
+  </div>
+</div>
+<div class="wrap">
+  <div id="viewList">
+    <div class="hero">
+      <h2>Pilih tugas</h2>
+      <p>Tugas dari admin tersimpan di server — terlihat di HP & laptop mana pun.</p>
+      <p style="margin-top:10px"><button type="button" class="btn" id="refreshBtn">Muat ulang</button>
+      <span id="countLabel" style="margin-left:10px;font-size:.9rem;color:var(--mute)"></span></p>
+    </div>
+    <div id="list"></div>
+  </div>
+  <div id="viewTugas">
+    <div class="hero">
+      <button type="button" class="btn ghost" id="backBtn">← Kembali</button>
+      <h2 id="tugasTitle" style="margin-top:12px">Tugas</h2>
+      <p id="tugasMeta"></p>
+      <p id="progress" style="margin-top:8px;font-weight:700;color:var(--primary)"></p>
+    </div>
+    <div id="soalArea"></div>
+  </div>
+</div>
+<footer><a href="admin.html">Admin</a> · <a href="login.html">Login</a></footer>
+<script>
+const API="";
+const SESSION_KEY="portal_tugas_session";
+const session=(function(){try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||"null")}catch(e){return null}})();
+if(!session||!session.username)location.href="login.html";
+document.getElementById("userName").textContent=session.name||session.username;
+document.getElementById("userMeta").textContent="@"+session.username+(session.kelas?" · Kelas "+session.kelas:"");
+document.getElementById("logoutBtn").onclick=function(){sessionStorage.removeItem(SESSION_KEY);location.href="login.html"};
+
+let currentTugas=null, currentSub=null;
+
+async function fetchTugas(){
+  const r=await fetch(API+"/api/tugas");
+  if(!r.ok)throw new Error("Gagal memuat tugas");
+  return r.json();
+}
+async function fetchSub(tugasId){
+  const r=await fetch(API+"/api/submissions/me?userId="+encodeURIComponent(session.id)+"&tugasId="+encodeURIComponent(tugasId));
+  if(!r.ok)return null;
+  return r.json();
+}
+async function postAnswer(tugasId,questionId,answer,lock){
+  const r=await fetch(API+"/api/submissions/answer",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({userId:session.id,tugasId,questionId,answer,lock})
+  });
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.error||"Gagal menyimpan");
+  return d;
+}
+
+async function renderList(){
+  const box=document.getElementById("list");
+  box.innerHTML="<div class='card empty'>Memuat...</div>";
+  try{
+    const list=await fetchTugas();
+    document.getElementById("countLabel").textContent=list.length?(list.length+" tugas"):"";
+    box.innerHTML="";
+    if(!list.length){box.innerHTML="<div class='card empty'>Belum ada tugas dari admin.</div>";return}
+    for(const t of list){
+      let answered=0,locked=0;
+      try{
+        const sub=await fetchSub(t.id);
+        if(sub&&sub.answers){
+          (t.questions||[]).forEach(function(q){
+            if(sub.answers[q.id]){answered++;if(sub.answers[q.id].locked)locked++}
+          });
+        }
+      }catch(e){}
+      const card=document.createElement("div");card.className="card";
+      card.innerHTML="<span class='tag'>"+(t.mapel||"-")+"</span><h3>"+t.title+"</h3>"+
+        "<div class='meta'>"+(t.questions||[]).length+" soal PG"+(answered?" · dijawab "+answered:"")+(locked?" · terkunci "+locked:"")+"</div>"+
+        (t.description?"<p style='color:var(--mute);font-size:.9rem'>"+t.description+"</p>":"")+
+        "<button type='button' class='btn'>Buka tugas</button>";
+      card.querySelector("button").onclick=function(){openTugas(t)};
+      box.appendChild(card);
+    }
+  }catch(e){
+    box.innerHTML="<div class='card empty'>Gagal memuat. Pastikan server berjalan.<br>"+e.message+"</div>";
+  }
+}
+
+async function openTugas(t){
+  currentTugas=t;
+  document.getElementById("viewList").style.display="none";
+  document.getElementById("viewTugas").style.display="block";
+  document.getElementById("tugasTitle").textContent=t.title;
+  document.getElementById("tugasMeta").textContent=(t.mapel||"")+" · "+(t.questions||[]).length+" soal PG";
+  currentSub=await fetchSub(t.id);
+  renderSoal();
+}
+
+function renderSoal(){
+  const t=currentTugas, qs=t.questions||[], sub=currentSub, area=document.getElementById("soalArea");
+  area.innerHTML="";
+  let answered=0,locked=0;
+  qs.forEach(function(q,i){
+    const ans=sub&&sub.answers?sub.answers[q.id]:null;
+    const isLocked=ans&&ans.locked;
+    if(ans)answered++;
+    if(isLocked)locked++;
+    const box=document.createElement("div");
+    box.className="qitem"+(isLocked?" locked-box":"");
+    let optsHtml="";
+    const options=q.options||{};
+    ["A","B","C","D"].forEach(function(k){
+      if(!options[k])return;
+      const checked=ans&&ans.answer===k?" checked":"";
+      const dis=isLocked?" disabled":"";
+      optsHtml+="<label class='opt'><input type='radio' name='q_"+q.id+"' value='"+k+"'"+checked+dis+"> <strong>"+k+".</strong> "+options[k]+"</label>";
+    });
+    box.innerHTML="<h4>Soal "+(i+1)+". "+q.body+"</h4>"+optsHtml+
+      "<div class='actions'>"+(isLocked
+        ?"<span class='lock-badge'>🔒 Jawaban terkunci — tidak dapat diubah</span>"
+        :"<button type='button' class='btn ghost' data-save='"+q.id+"'>Simpan pilihan</button>"+
+         "<button type='button' class='btn lock' data-lock='"+q.id+"'>🔒 Kunci jawaban</button>")+"</div>";
+    area.appendChild(box);
+  });
+  document.getElementById("progress").textContent="Progress: dijawab "+answered+"/"+qs.length+" · terkunci "+locked+"/"+qs.length;
+
+  area.querySelectorAll("[data-save]").forEach(function(btn){
+    btn.onclick=async function(){
+      const qid=btn.dataset.save;
+      const sel=area.querySelector("input[name='q_"+qid+"']:checked");
+      if(!sel){alert("Pilih jawaban dulu.");return}
+      try{
+        currentSub=await postAnswer(t.id,qid,sel.value,false);
+        alert("Disimpan (belum dikunci).");
+        renderSoal();
+      }catch(e){alert(e.message)}
+    };
+  });
+  area.querySelectorAll("[data-lock]").forEach(function(btn){
+    btn.onclick=async function(){
+      const qid=btn.dataset.lock;
+      const sel=area.querySelector("input[name='q_"+qid+"']:checked");
+      if(!sel){alert("Pilih jawaban dulu.");return}
+      if(!confirm("Kunci jawaban? Setelah dikunci tidak bisa diubah."))return;
+      try{
+        currentSub=await postAnswer(t.id,qid,sel.value,true);
+        alert("Jawaban terkunci.");
+        renderSoal();
+      }catch(e){alert(e.message)}
+    };
+  });
+}
+
+document.getElementById("backBtn").onclick=function(){
+  currentTugas=null;currentSub=null;
+  document.getElementById("viewTugas").style.display="none";
+  document.getElementById("viewList").style.display="block";
+  renderList();
+};
+document.getElementById("refreshBtn").onclick=function(){renderList()};
+renderList();
+</script>
+</body>
+</html>
